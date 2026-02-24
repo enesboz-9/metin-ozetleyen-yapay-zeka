@@ -1,41 +1,46 @@
 from transformers import pipeline
 from langdetect import detect, DetectorFactory
-import torch
 
+# Dil tespiti için kararlılık
 DetectorFactory.seed = 0
 
 class SummarizerModel:
     def __init__(self):
-        # En stabil ve hafif model
+        # En hafif ve uyumlu model
         self.model_name = "t5-small" 
         self.pipe = None
 
     def load_model(self):
+        """Modeli sadece ihtiyaç anında ve CPU üzerinde yükler."""
         if self.pipe is None:
-            # CPU üzerinde çalışması için zorluyoruz
-            self.pipe = pipeline(
-                "summarization",
-                model=self.model_name,
-                device=-1
-            )
+            try:
+                self.pipe = pipeline(
+                    "summarization",
+                    model=self.model_name,
+                    device=-1 # CPU zorlaması
+                )
+            except Exception as e:
+                print(f"Model yukleme hatasi: {e}")
         return self.pipe
 
-    def detect_language(self, text: str):
-        try:
-            return detect(text)
-        except:
-            return "unknown"
-
     def summarize(self, text: str, max_len: int = 100):
-        if self.pipe is None:
-            self.load_model()
-            
-        lang = self.detect_language(text)
+        # Modeli yükle (yüklenmemişse)
+        model = self.load_model()
         
-        # T5-small için metnin önüne 'summarize: ' eklemek performansı artırır
+        if model is None:
+            return {"summary": "Model yuklenemedi.", "detected_language": "Bilinmiyor"}
+
+        # Dil tespiti
+        try:
+            lang = detect(text)
+        except:
+            lang = "unknown"
+        
+        # Özetleme işlemi
+        # T5 modeli 'summarize: ' ön ekiyle daha iyi çalışır
         input_text = f"summarize: {text}"
         
-        result = self.pipe(
+        result = model(
             input_text,
             max_length=max_len,
             min_length=30,
